@@ -37,7 +37,7 @@ from src.schemas.models import (
 # Map từ tên OpenAI-style → các tên có thể xuất hiện trên Gemini Web UI
 MODEL_ALIASES: dict[str, list[str]] = {
     "gemini-pro":       ["Pro", "Nâng cao", "Advanced", "Gemini Pro", "2.5 Pro"],
-    "gemini-flash":     ["Nhanh", "Flash", "Gemini Flash", "2.0 Flash"],
+    "gemini-flash":     ["Nhanh", "Flash", "Gemini Flash", "3.0 Flash"],
     "gemini-thinking":  ["Tư duy", "Thinking", "Deep Think", "Tư duy sâu"],
     "gemini-basic":     ["Cơ bản", "Basic", "Gemini Basic"],
 }
