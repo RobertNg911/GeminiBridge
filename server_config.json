@@ -1,0 +1,13 @@
+{
+    "host": "127.0.0.1",
+    "port": 8765,
+    "api_key": "CHANGE_ME",
+    "max_sessions": 3,
+    "idle_timeout_seconds": 300,
+    "min_request_delay_seconds": 2.0,
+    "max_request_delay_seconds": 5.0,
+    "default_model": "gemini-flash",
+    "headless": true,
+    "guest_mode": true,
+    "log_level": "INFO"
+}

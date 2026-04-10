@@ -1,0 +1,15 @@
+{
+    "save_chat_history": false,
+    "chat_history_file": "chat_history.json",
+    "chrome_profile_dir": "./chrome_profile",
+    "headless": true,
+    "typing_speed_min": 0.03,
+    "typing_speed_max": 0.12,
+    "action_delay_min": 1.0,
+    "action_delay_max": 3.0,
+    "response_timeout": 120,
+    "language": "vi-VN",
+    "selected_model": "Nhanh",
+    "guest_mode": true,
+    "last_chat_url": ""
+}
