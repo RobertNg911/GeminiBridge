@@ -17,19 +17,19 @@ A lightweight proxy server that transforms Google Gemini Web interface into Open
 ┌─────────────┐      ┌─────────────┐      ┌─────────────────────┐
 │   Claude    │      │  OpenAI SDK │      │   Any OpenAI        │
 │    Code     │      │   Client    │      │   Compatible       │
-└──────┬──────┘      └──────┬──────┘      └──────────┬──────────┘
+└──────┬──────┘      └──────┬──────┘      └──────────┬────────┘
        │                     │                       │
        └─────────────────────┼───────────────────────┘
                              │
                     ┌────────▼────────┐
-                    │  Proxy Server    │
-                    │  (FastAPI)      │
-                    │  :8765          │
-                    └────────┬───────┘
+                    │  Proxy Server │
+                    │  (FastAPI)  │
+                    │  :8765      │
+                    └─────────────┘
                              │
                     ┌────────▼────────┐
-                    │  Gemini Web    │
-                    │  (Chrome/Edge)│
+                    │  Gemini Web  │
+                    │(Chrome/Edge)│
                     └───────────────┘
 ```
 
@@ -46,30 +46,22 @@ A lightweight proxy server that transforms Google Gemini Web interface into Open
 
 ---
 
-## Quick Start
-
-### Installation
+## Installation
 
 ```bash
-# Clone repository
-git clone https://github.com/your-username/GeminiBridge.git
+git clone https://github.com/RobertNg911/GeminiBridge.git
 cd GeminiBridge
-
-# Create virtual environment
 python -m venv venv
-
-# Windows
-venv\Scripts\activate
-# Linux/macOS
-source venv/bin/activate
-
-# Install dependencies
+source venv/bin/activate  # Linux/macOS
+venv\Scripts\activate   # Windows
 pip install -r requirements.txt
 ```
 
 **Requirements:** Python 3.10+, Chrome or Microsoft Edge
 
-### Run Server
+---
+
+## Quick Start
 
 ```bash
 python start_server.py
@@ -83,15 +75,7 @@ Server starts at `http://127.0.0.1:8765`
 
 ### With Claude Code
 
-```powershell
-# Windows PowerShell
-$env:ANTHROPIC_BASE_URL="http://127.0.0.1:8765"
-$env:ANTHROPIC_API_KEY="your-api-key-here"
-$env:ANTHROPIC_MODEL="gemini-pro"
-```
-
 ```bash
-# Linux/macOS
 export ANTHROPIC_BASE_URL="http://127.0.0.1:8765"
 export ANTHROPIC_API_KEY="your-api-key-here"
 export ANTHROPIC_MODEL="gemini-pro"
@@ -120,111 +104,46 @@ print(response.choices[0].message.content)
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    System Architecture               │
+┌──────────────────────────────────────────────────��──────────────┐
+│                  System Architecture                        │
 └─────────────────────────────────────────────────────────────────┘
 
-                            ┌──────────────────────┐
-                            │                     │
-                      ┌─────▼─────┐      ┌──────▼──────┐
-                      │  OpenAI   │      │ Anthropic  │
-                      │ Endpoint │      │  Endpoint │
-                      └─────┬─────┘      └──────┬──────┘
-                           │                    │
-                           └────────┬───────────┘
-                                    │
-                           ┌────────▼──────────┐
-                           │    Request Router │
-                           │  (Model Mapping,   │
-                           │   Auth Check,      │
-                           │   Throttling)     │
-                           └──────────┬──────────┘
-                                      │
-                    ┌─────────────────┼─────────────────┐
-                    │                 │                   │
-              ┌─────▼─────┐     ┌──────▼──────┐     ┌──────▼──────┐
-              │ Session 1 │     │ Session 2   │     │ Session N   │
-              │  (Edge)   │     │  (Chrome)  │     │  (Edge)    │
-              └─────┬─────┘     └──────┬──────┘     └──────┬──────┘
-                   │                  │                   │
-                   └──────────────────┼───────────────────┘
-                                      │
-                             ┌────────▼────────┐
-                             │   Gemini Web    │
-                             │    UI (AI)      │
-                             └─────────────────┘
-```
-
-## Request Flow
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Request Flow                      │
-└─────────────────────────────────────────────────────────────────┘
-
-1. Client Request
-       │
-       ▼
-2. Auth Validation (API Key Check)
-       │
-       ▼
-3. Route to Session Pool
-       │
-       ▼
-4. Get/Create Browser Session
-       │
-       ▼
-5. Send Prompt to Gemini Web
-       │
-       ▼
-6. Poll Response (0.5s interval)
-       │
-       ▼
-7. Stream Back to Client
-       │
-       ▼
-8. Return SSE/JSON Response
+                      ┌───────────────────┐
+                 ┌────▼────┐     ┌──────▼──────┐
+                 │ OpenAI  │     │ Anthropic  │
+                 │Endpoint│     │  Endpoint │
+                 └────┬────┘     └──────┬──────┘
+                      │                │
+                      └───────┬────────┘
+                              │
+                    ┌─────────▼──────────┐
+                    │   Request Router  │
+                    └─────────┬──────────┘
+                              │
+        ┌─────────────────────┼─────────────────────┐
+        │                   │                      │
+  ┌─────▼─────┐     ┌──────▼──────┐     ┌──────▼──────┐
+  │Session 1  │     │Session 2   │     │Session N   │
+  │ (Edge)   │     │ (Chrome)  │     │  (Edge)   │
+  └──────────┘     └───────────┘     └───────────┘
+        │                   │                      │
+        └───────────────────┼──────────────────────┘
+                         │
+                ┌────────▼────────┐
+                │ Gemini Web  │
+                └────────────┘
 ```
 
 ---
 
 ## API Reference
 
-### Endpoints
-
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/v1/chat/completions` | POST | OpenAI Chat API |
 | `/v1/messages` | POST | Anthropic Messages API |
 | `/v1/models` | GET | List available models |
-| `/v1/sessions` | GET | List active sessions |
 | `/health` | GET | Server health check |
-
-### OpenAI Format
-
-```bash
-curl -X POST http://127.0.0.1:8765/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: YOUR_API_KEY" \
-  -d '{
-    "model": "gemini-pro",
-    "messages": [{"role": "user", "content": "Hello"}],
-    "stream": false
-  }'
-```
-
-### Anthropic Format
-
-```bash
-curl -X POST http://127.0.0.1:8765/v1/messages \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: YOUR_API_KEY" \
-  -d '{
-    "model": "gemini-pro",
-    "messages": [{"role": "user", "content": "Hello"}],
-    "stream": false
-  }'
-```
 
 ---
 
@@ -245,124 +164,25 @@ Edit `server_config.json`:
 }
 ```
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `host` | string | 127.0.0.1 | Server bind address |
-| `port` | int | 8765 | Server port |
-| `api_key` | string | - | Your API key |
-| `max_sessions` | int | 1 | Max browser tabs |
-| `idle_timeout_seconds` | int | 600 | Browser idle timeout |
-| `default_model` | string | gemini-pro | Default model |
-| `headless` | boolean | true | Run browser headless |
-| `guest_mode` | boolean | true | Use guest mode |
-
 ---
 
 ## Available Models
 
-| Model | Description | Capabilities |
-|-------|-------------|-------------|
-| `gemini-pro` | Most capable | Complex reasoning, coding |
-| `gemini-thinking` | Deep thinking | Step-by-step analysis |
-| `gemini-flash` | Fast | Quick responses |
-| `gemini-basic` | Basic | Simple tasks |
-
----
-
-## Project Structure
-
-```
-GeminiBridge/
-├── src/
-│   ├── api/
-│   │   ├── server.py       # FastAPI server
-│   │   └── router.py       # Model routing
-│   ├── core/
-│   │   ├── client.py       # Gemini browser client
-│   │   ├── adapter.py     # API format adapter
-│   │   └── session.py     # Session manager
-│   └── schemas/
-│       └── models.py       # Pydantic models
-├── start_server.py        # Entry point
-├── server_config.json     # Server configuration
-├── config.json          # Client configuration
-├── requirements.txt    # Python dependencies
-└── README.md           # This file
-```
-
----
-
-## Technical Notes
-
-### How It Works
-
-1. **Browser Automation**: Uses `nodriver` (Chrome DevTools Protocol) for browser control
-2. **Session Pool**: Manages multiple browser sessions for parallel requests
-3. **Auto-Recovery**: BrowserWatchdog monitors and restarts crashed browsers
-4. **Streaming**: Polls Gemini DOM every 500ms for real-time response
-
-### Headless Mode
-
-When `headless: true`, the browser runs "pseudo-headless" - positioned at `-32000, -32000` on screen. This ensures:
-- Accurate DOM rendering
-- Bypasses headless detection
-- Hidden from user but fully functional
-
-### Guest Mode
-
-With `guest_mode: true`:
-- Uses anonymous browser profile
-- No Google login required
-- Safe for public deployment
-- Works with Gemini free tier
-
----
-
-## Troubleshooting
-
-### Issue: 401 Unauthorized
-
-**Solution:** Check `api_key` in `server_config.json` matches your request header
-
-### Issue: Browser not starting
-
-**Solution:** Ensure Chrome/Edge is installed. Check `headless: false` for debugging
-
-### Issue: Slow response
-
-**Solution:** This is normal due to browser automation overhead. Consider:
-- Using `gemini-flash` for faster responses
-- Reducing `max_sessions` to 1
-- Increasing throttle delays
+| Model | Description |
+|-------|-------------|
+| `gemini-pro` | Most capable |
+| `gemini-thinking` | Deep thinking |
+| `gemini-flash` | Fast |
+| `gemini-basic` | Basic |
 
 ---
 
 ## License
 
-MIT License
-
-Copyright (c) 2026
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+MIT License - See LICENSE file
 
 ---
 
 ## Disclaimer
 
-This project is for educational and research purposes. Use it responsibly and in accordance with Google's Terms of Service. The authors are not responsible for any misuse or account restrictions.
+This project is for educational purposes. Use responsibly and in accordance with Google's Terms of Service.
