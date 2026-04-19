@@ -160,3 +160,69 @@ class SessionInfo(BaseModel):
     message_count: int
     idle_seconds: float
     last_active_iso: str
+
+
+# ============================================================
+# Anthropic API Models (for Claude Code compatibility)
+# ============================================================
+
+class AnthropicMessageContent(BaseModel):
+    """Content block trong Anthropic response."""
+    type: str = "text"
+    text: str = ""
+
+
+class AnthropicContentBlock(BaseModel):
+    """Content block trong request (text hoặc tool_use)."""
+    type: Literal["text", "image", "tool_use"] = "text"
+    text: Optional[str] = None
+    source: Optional[dict] = None  # For image类型
+
+
+class AnthropicMessage(BaseModel):
+    """Một message trong Anthropic API."""
+    role: Literal["user", "assistant"] = "user"
+    content: str | list[AnthropicContentBlock] = ""
+
+
+class AnthropicToolUse(BaseModel):
+    """Tool use block."""
+    id: str = ""
+    name: str = ""
+    input: dict = {}
+
+
+class AnthropicRequest(BaseModel):
+    """Request body cho POST /v1/messages (Anthropic format)."""
+    model: str = "gemini-flash"
+    messages: list[AnthropicMessage] = Field(default_factory=list)
+    system: Optional[str] = None
+    max_tokens: int = Field(default=4096, ge=1, le=8192)
+    temperature: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    stream: bool = False
+    tool_choice: Optional[dict] = None
+    tools: Optional[list[dict]] = None
+
+
+class AnthropicUsage(BaseModel):
+    """Token usage trong Anthropic format."""
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_creation_input_tokens: int = 0
+    cache_read_input_tokens: int = 0
+
+
+class AnthropicDelta(BaseModel):
+    """Delta cho streaming response."""
+    type: str = "content_block_delta"
+    delta: Optional[dict] = None
+    text: Optional[str] = None
+
+
+class AnthropicMessageEvent(BaseModel):
+    """Một event trong Anthropic streaming."""
+    type: str = "message_start"
+    message: Optional[dict] = None
+    delta: Optional[dict] = None
+    content_block: Optional[dict] = None
+    usage: Optional[dict] = None

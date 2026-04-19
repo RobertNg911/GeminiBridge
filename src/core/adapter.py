@@ -27,6 +27,8 @@ from src.schemas.models import (
     DeltaMessage,
     ErrorResponse,
     ErrorDetail,
+    AnthropicMessage,
+    AnthropicContentBlock,
 )
 
 
@@ -43,7 +45,7 @@ MODEL_ALIASES: dict[str, list[str]] = {
 }
 
 # Thứ tự fallback khi model yêu cầu không khả dụng
-FALLBACK_ORDER = ["gemini-pro", "gemini-flash", "gemini-thinking", "gemini-basic"]
+FALLBACK_ORDER = ["gemini-pro", "gemini-thinking", "gemini-flash", "gemini-basic"]
 
 
 def normalize_model_name(model: str) -> str:
@@ -196,3 +198,94 @@ def build_error_response(
             code=code,
         )
     )
+
+
+# ============================================================
+# Anthropic API Converters
+# ============================================================
+
+def convert_anthropic_to_prompt(
+    messages: list[AnthropicMessage],
+    system: Optional[str] = None,
+    is_new_session: bool = True,
+) -> str:
+    """
+    Chuyển đổi Anthropic messages → prompt text cho Gemini.
+
+    Anthropic format có thể là:
+    - content là string
+    - content là list of content blocks (text, image, tool_use)
+    """
+    if not messages:
+        return ""
+
+    if not is_new_session:
+        for msg in reversed(messages):
+            if msg.role == "user":
+                if isinstance(msg.content, str):
+                    return msg.content.strip()
+                elif isinstance(msg.content, list):
+                    for block in msg.content:
+                        if hasattr(block, "text") and block.text:
+                            return block.text
+        return messages[-1].content.strip() if isinstance(messages[-1].content, str) else ""
+
+    parts: list[str] = []
+
+    if system:
+        parts.append(f"<SYSTEM_TURN>\n{system}\n</SYSTEM_TURN>")
+
+    for msg in messages:
+        content = msg.content if isinstance(msg.content, str) else ""
+
+        if isinstance(msg.content, list):
+            for block in msg.content:
+                if hasattr(block, "text") and block.text:
+                    content = block.text
+
+        if msg.role == "user":
+            parts.append(f"<USER_TURN>\n{content}\n</USER_TURN>")
+        elif msg.role == "assistant":
+            parts.append(f"<ASSISTANT_TURN>\n{content}\n</ASSISTANT_TURN>")
+
+    return "\n\n".join(parts)
+
+
+def build_anthropic_response(
+    content: str,
+    model: str,
+    request_id: Optional[str] = None,
+    message_id: Optional[str] = None,
+) -> dict:
+    """Tạo response object chuẩn Anthropic từ text response của Gemini."""
+    import time
+    return {
+        "id": message_id or f"msg_{uuid.uuid4().hex[:12]}",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+            {
+                "type": "text",
+                "text": content,
+            }
+        ],
+        "model": model,
+        "stop_reason": "end_turn",
+        "stop_sequence": None,
+        "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+        },
+    }
+
+
+def build_anthropic_stream_event(
+    event_type: str,
+    data: Optional[dict] = None,
+) -> str:
+    """Tạo một SSE event chuẩn Anthropic."""
+    import json
+    event = {"type": event_type}
+    if data:
+        event.update(data)
+    return f"data: {json.dumps(event)}\n\n"

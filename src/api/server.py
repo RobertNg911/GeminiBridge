@@ -33,6 +33,7 @@ from src.schemas.models import (
     HealthResponse,
     ErrorResponse,
     GeminiMeta,
+    AnthropicRequest,
 )
 from src.core.adapter import (
     convert_messages_to_prompt,
@@ -41,6 +42,9 @@ from src.core.adapter import (
     build_stream_chunk,
     build_error_response,
     MODEL_ALIASES,
+    convert_anthropic_to_prompt,
+    build_anthropic_response,
+    build_anthropic_stream_event,
 )
 from src.core.session import SessionManager
 from src.api.router import select_best_model, get_all_supported_models
@@ -70,7 +74,7 @@ def load_server_config(path: str = "server_config.json") -> dict:
         "idle_timeout_seconds": 300,
         "min_request_delay_seconds": 2.0,
         "max_request_delay_seconds": 5.0,
-        "default_model": "gemini-flash",
+        "default_model": "gemini-pro",
         "headless": True,
         "guest_mode": True,
         "log_level": "INFO",
@@ -196,12 +200,28 @@ async def verify_api_key(request: Request):
     if expected_key == "nokey":
         return  # Bỏ qua auth
 
+    # Debug: log all headers
+    logger.info(f"DEBUG Headers: {dict(request.headers)}")
+
+    # Thử Bearer token
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
         token = auth_header[7:]
-        # [FIX C2] Constant-time comparison để chống timing attack
         if hmac.compare_digest(token.encode(), expected_key.encode()):
             return
+
+    # Thử x-api-key header (Claude Code / many clients)
+    api_key_header = request.headers.get("x-api-key", "")
+    if api_key_header and hmac.compare_digest(api_key_header.encode(), expected_key.encode()):
+        return
+
+    # Thử Anthropic-Auth-Token header
+    auth_token = request.headers.get("anthropic-auth-token", "")
+    if auth_token and hmac.compare_digest(auth_token.encode(), expected_key.encode()):
+        return
+
+    # Debug: log failed key
+    logger.warning(f"DEBUG Auth failed. Received keys - Authorization: {auth_header[:20]}..., x-api-key: {api_key_header[:20] if api_key_header else None}...")
 
     raise HTTPException(
         status_code=401,
@@ -231,7 +251,7 @@ async def chat_completions(body: ChatCompletionRequest):
             content=build_error_response("messages cannot be empty", "invalid_request_error").model_dump(),
         )
 
-    model = normalize_model_name(body.model or _server_config.get("default_model", "gemini-flash"))
+    model = normalize_model_name(body.model or _server_config.get("default_model", "gemini-pro"))
     session_id = body.session_id or f"default_{model}"
     request_id = f"chatcmpl-gemini-{uuid.uuid4().hex[:12]}"
 
@@ -467,17 +487,211 @@ async def list_sessions():
 
 
 # ============================================================
+# Anthropic API Endpoints (for Claude Code compatibility)
+# ============================================================
+
+@app.post("/v1/messages", dependencies=[Depends(verify_api_key)])
+async def anthropic_messages(request: Request):
+    """
+    Anthropic Messages API endpoint — tương thích với Claude Code.
+    Format: https://docs.anthropic.com/en/docs/api-clients
+    """
+    try:
+        body = await request.json()
+    except Exception as e:
+        logger.error(f"Failed to parse JSON: {e}")
+        return JSONResponse(
+            status_code=400,
+            content={"error": {"type": "invalid_request_error", "message": "Invalid JSON body"}},
+        )
+
+    messages = body.get("messages", [])
+    if not messages:
+        return JSONResponse(
+            status_code=400,
+            content={"error": {"type": "invalid_request_error", "message": "messages is required"}},
+        )
+
+    model = normalize_model_name(body.get("model") or _server_config.get("default_model", "gemini-pro"))
+    session_id = body.get("model", "default")
+    request_id = f"msg_{uuid.uuid4().hex[:12]}"
+    system = body.get("system")
+    stream = body.get("stream", False)
+
+    try:
+        session = await _manager.get_or_create(session_id, model)
+
+        if not session.is_ready:
+            return JSONResponse(
+                status_code=503,
+                content={"error": {"type": "server_error", "message": "Browser session not ready"}},
+            )
+
+        await _throttler.wait_if_needed(session_id)
+
+        model_result = await select_best_model(session.client, model, session.current_model)
+        session.current_model = model_result.actual_model_normalized
+
+        is_new = session.message_count == 0
+
+        # Convert Anthropic messages format to prompt
+        from src.core.adapter import AnthropicMessage
+        msgs = [AnthropicMessage(role=m.get("role", "user"), content=m.get("content", "")) for m in messages]
+        prompt = convert_anthropic_to_prompt(msgs, system, is_new_session=is_new)
+
+        if not prompt:
+            return JSONResponse(
+                status_code=400,
+                content={"error": {"type": "invalid_request_error", "message": "Could not extract prompt from messages"}},
+            )
+
+        if stream:
+            return EventSourceResponse(
+                _stream_anthropic_response(session, prompt, model_result.actual_model_normalized, request_id, session_id),
+                media_type="text/event-stream",
+            )
+
+        async with session.lock:
+            response_text = await session.client.chat(prompt)
+
+        session.message_count += 1
+        session.touch()
+        _throttler.record_request(session_id)
+
+        if not response_text:
+            return JSONResponse(
+                status_code=500,
+                content={"error": {"type": "server_error", "message": "No response from Gemini"}},
+            )
+
+        result = build_anthropic_response(
+            content=response_text,
+            model=model_result.actual_model_normalized,
+            message_id=request_id,
+        )
+        return JSONResponse(content=result)
+
+    except Exception as e:
+        logger.error(f"✗ Anthropic messages error: {e}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"error": {"type": "server_error", "message": str(e)}},
+        )
+
+
+async def _stream_anthropic_response(
+    session,
+    prompt: str,
+    model: str,
+    request_id: str,
+    session_id: str = "default",
+) -> AsyncGenerator[str, None]:
+    """Generator cho Anthropic-style SSE streaming."""
+    import json
+
+    prev_text_backup = ""
+    try:
+        async with session.lock:
+            ok = await session.client.send_message(prompt)
+            if not ok:
+                yield f"data: {json.dumps({'type': 'error', 'error': {'type': 'server_error', 'message': 'Failed to send message'}})}\n\n"
+                return
+
+            msg_id = f"msg_{uuid.uuid4().hex[:12]}"
+            msg_data = {'type': 'message_start', 'message': {'id': msg_id, 'type': 'message', 'role': 'assistant', 'content': [], 'model': model, 'stop_reason': None, 'usage': {'input_tokens': 0, 'output_tokens': 0}}}
+            yield f"data: {json.dumps(msg_data)}\n\n"
+
+            prev_text = session.client.last_bot_response or ""
+            prev_text_backup = prev_text
+            timeout = session.client.config.response_timeout
+            start = time.time()
+            stable_count = 0
+
+            await asyncio.sleep(3)
+
+            while time.time() - start < timeout:
+                await asyncio.sleep(0)
+
+                generating = await session.client._is_generating()
+                current_text = await session.client._get_latest_response() or ""
+
+                if current_text and current_text != prev_text and current_text != (session.client.last_bot_response or ""):
+                    new_content = current_text
+                    if prev_text and current_text.startswith(prev_text):
+                        new_content = current_text[len(prev_text):]
+                    elif prev_text == session.client.last_bot_response:
+                        new_content = current_text
+
+                    if new_content:
+                        yield f"data: {json.dumps({'type': 'content_block_delta', 'delta': {'type': 'text_delta', 'text': new_content}, 'usage': {'output_tokens': 1}})}\n\n"
+
+                    prev_text = current_text
+                    stable_count = 0
+
+                elif current_text == prev_text and current_text != "" and current_text != session.client.last_bot_response:
+                    if not generating:
+                        stable_count += 1
+                        if stable_count >= 3:
+                            break
+
+                await asyncio.sleep(0.5)
+
+            if prev_text and prev_text != session.client.last_bot_response:
+                session.client.last_bot_response = prev_text.strip()
+
+            session.message_count += 1
+            session.touch()
+            if _throttler:
+                _throttler.record_request(session_id)
+
+            yield f"data: {json.dumps({'type': 'message_delta', 'delta': {'stop_reason': 'end_turn'}, 'usage': {'output_tokens': 0}})}\n\n"
+            yield f"data: {json.dumps({'type': 'message_stop'})}\n\n"
+            yield "data: [DONE]\n\n"
+
+    except asyncio.CancelledError:
+        logger.info("Client disconnected mid-stream (Anthropic)")
+        if prev_text_backup and prev_text_backup != session.client.last_bot_response:
+            session.client.last_bot_response = prev_text_backup
+            if prev_text_backup:
+                session.message_count += 1
+                session.touch()
+                if _throttler:
+                    _throttler.record_request(session_id)
+        raise
+    except Exception as e:
+        logger.error(f"✗ Anthropic stream error: {e}", exc_info=True)
+        yield f"data: {json.dumps({'type': 'error', 'error': {'type': 'server_error', 'message': str(e)}})}\n\n"
+
+
+@app.get("/v1/models", dependencies=[Depends(verify_api_key)])
+async def list_models_anthropic():
+    """Liệt kê models theo format Anthropic."""
+    models = get_all_supported_models()
+    data = [
+        {
+            "id": m["id"],
+            "object": "model",
+            "created": int(time.time()),
+            "owned_by": "gemini-web",
+        }
+        for m in models
+    ]
+    return {"object": "list", "data": data}
+
+
+# ============================================================
 # Root — Redirect to docs
 # ============================================================
 
 @app.get("/")
 async def root():
     return {
-        "message": "Gemini Web API Server (OpenAI-Compatible)",
+        "message": "Gemini Web API Server (OpenAI + Anthropic Compatible)",
         "docs": "/docs",
         "health": "/health",
         "endpoints": {
-            "chat": "POST /v1/chat/completions",
+            "openai_chat": "POST /v1/chat/completions",
+            "anthropic_chat": "POST /v1/messages",
             "models": "GET /v1/models",
             "sessions": "GET /v1/sessions",
         },

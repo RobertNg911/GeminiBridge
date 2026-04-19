@@ -3,59 +3,59 @@
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                         GeminiBridge                                │
-│              Browser Automation → REST API Bridge                    │
+│              Browser Automation → REST API Bridge                   │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-A lightweight proxy server that transforms Google Gemini Web interface into OpenAI and Anthropic compatible REST APIs. Leverage free Gemini Web quotas for your AI-powered applications.
+Máy chủ proxy nhẹ biến giao diện Google Gemini Web thành REST API tương thích OpenAI và Anthropic. Tận dụng quota miễn phí của Gemini Web cho ứng dụng AI của bạn.
 
 ---
 
-## Overview
+## Tổng Quan
 
 ```
 ┌─────────────┐      ┌─────────────┐      ┌─────────────────────┐
 │   Claude    │      │  OpenAI SDK │      │   Any OpenAI        │
 │    Code     │      │   Client    │      │   Compatible       │
-└──────┬──────┘      └──────┬──────┘      └──────────┬──────────┘
+└──────┬──────┘      └──────┬──────┘      └──────────┬────────┘
        │                     │                       │
        └─────────────────────┼───────────────────────┘
                              │
                     ┌────────▼────────┐
-                    │  Proxy Server    │
+                    │  Proxy Server   │
                     │  (FastAPI)      │
                     │  :8765          │
                     └────────┬───────┘
                              │
                     ┌────────▼────────┐
-                    │  Gemini Web    │
-                    │  (Chrome/Edge)│
+                    │  Gemini Web     │
+                    │  (Chrome/Edge) │
                     └───────────────┘
 ```
 
-## Key Features
+## Tính Năng Chính
 
-| Feature | Description |
-|---------|-------------|
-| **Dual API Support** | OpenAI + Anthropic compatible endpoints |
-| **Anti-Detection** | nodriver-based browser automation |
-| **Auto Recovery** | Automatic browser restart on crash |
-| **Streaming** | Real-time SSE response streaming |
-| **Guest Mode** | No Google login required |
+| Tính năng | Mô tả |
+|-----------|-------|
+| **Hỗ trợ Dual API** | Tương thích OpenAI + Anthropic endpoints |
+| **Anti-Detection** | Tự động hóa trình duyệt nodriver |
+| **Tự Phục Hồi** | Tự động khởi động lại trình duyệt khi crash |
+| **Streaming** | Streaming thời gian thực qua SSE |
+| **Guest Mode** | Không cần đăng nhập Google |
 | **Model Pool** | Pro / Thinking / Flash / Basic |
 
 ---
 
-## Quick Start
+## Cài Đặt Nhanh
 
-### Installation
+### Cài đặt
 
 ```bash
 # Clone repository
 git clone https://github.com/your-username/GeminiBridge.git
 cd GeminiBridge
 
-# Create virtual environment
+# Tạo môi trường ảo
 python -m venv venv
 
 # Windows
@@ -63,25 +63,25 @@ venv\Scripts\activate
 # Linux/macOS
 source venv/bin/activate
 
-# Install dependencies
+# Cài đặt dependencies
 pip install -r requirements.txt
 ```
 
-**Requirements:** Python 3.10+, Chrome or Microsoft Edge
+**Yêu cầu:** Python 3.10+, Chrome hoặc Microsoft Edge
 
-### Run Server
+### Chạy Server
 
 ```bash
 python start_server.py
 ```
 
-Server starts at `http://127.0.0.1:8765`
+Server chạy tại `http://127.0.0.1:8765`
 
 ---
 
-## Usage
+## Cách Sử Dụng
 
-### With Claude Code
+### Với Claude Code
 
 ```powershell
 # Windows PowerShell
@@ -97,7 +97,7 @@ export ANTHROPIC_API_KEY="your-api-key-here"
 export ANTHROPIC_MODEL="gemini-pro"
 ```
 
-### With OpenAI SDK
+### Với OpenAI SDK
 
 ```python
 from openai import OpenAI
@@ -117,7 +117,7 @@ print(response.choices[0].message.content)
 
 ---
 
-## Architecture
+## Kiến Trúc
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -134,10 +134,10 @@ print(response.choices[0].message.content)
                            └────────┬───────────┘
                                     │
                            ┌────────▼──────────┐
-                           │    Request Router │
-                           │  (Model Mapping,   │
-                           │   Auth Check,      │
-                           │   Throttling)     │
+                           │    Request Router│
+                           │  (Model Mapping,  │
+                           │   Auth Check,    │
+                           │   Throttling)    │
                            └──────────┬──────────┘
                                       │
                     ┌─────────────────┼─────────────────┐
@@ -150,57 +150,57 @@ print(response.choices[0].message.content)
                    └──────────────────┼───────────────────┘
                                       │
                              ┌────────▼────────┐
-                             │   Gemini Web    │
+                             │   Gemini Web     │
                              │    UI (AI)      │
                              └─────────────────┘
 ```
 
-## Request Flow
+## Luồng Xử Lý Request
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Request Flow                      │
 └─────────────────────────────────────────────────────────────────┘
 
-1. Client Request
+1. Client Request (Yêu cầu từ Client)
        │
        ▼
-2. Auth Validation (API Key Check)
+2. Auth Validation (Kiểm tra API Key)
        │
        ▼
-3. Route to Session Pool
+3. Route to Session Pool (Định tuyến đến Session Pool)
        │
        ▼
-4. Get/Create Browser Session
+4. Get/Create Browser Session (Lấy/Tạo Session trình duyệt)
        │
        ▼
-5. Send Prompt to Gemini Web
+5. Send Prompt to Gemini Web (Gửi prompt đến Gemini Web)
+       │
+       ��
+6. Poll Response (0.5s interval) (Kiểm tra phản hồi mỗi 0.5s)
        │
        ▼
-6. Poll Response (0.5s interval)
+7. Stream Back to Client (Stream về cho Client)
        │
        ▼
-7. Stream Back to Client
-       │
-       ▼
-8. Return SSE/JSON Response
+8. Return SSE/JSON Response (Trả về SSE/JSON)
 ```
 
 ---
 
-## API Reference
+## Tham Khảo API
 
 ### Endpoints
 
-| Endpoint | Method | Description |
+| Endpoint | Method | Mô tả |
 |----------|--------|-------------|
 | `/v1/chat/completions` | POST | OpenAI Chat API |
 | `/v1/messages` | POST | Anthropic Messages API |
-| `/v1/models` | GET | List available models |
-| `/v1/sessions` | GET | List active sessions |
-| `/health` | GET | Server health check |
+| `/v1/models` | GET | Liệt kê models khả dụng |
+| `/v1/sessions` | GET | Liệt kê sessions đang hoạt động |
+| `/health` | GET | Kiểm tra sức khỏe server |
 
-### OpenAI Format
+### Định dạng OpenAI
 
 ```bash
 curl -X POST http://127.0.0.1:8765/v1/chat/completions \
@@ -213,7 +213,7 @@ curl -X POST http://127.0.0.1:8765/v1/chat/completions \
   }'
 ```
 
-### Anthropic Format
+### Định dạng Anthropic
 
 ```bash
 curl -X POST http://127.0.0.1:8765/v1/messages \
@@ -228,9 +228,9 @@ curl -X POST http://127.0.0.1:8765/v1/messages \
 
 ---
 
-## Configuration
+## Cấu Hình
 
-Edit `server_config.json`:
+Chỉnh sửa `server_config.json`:
 
 ```json
 {
@@ -245,95 +245,95 @@ Edit `server_config.json`:
 }
 ```
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `host` | string | 127.0.0.1 | Server bind address |
-| `port` | int | 8765 | Server port |
-| `api_key` | string | - | Your API key |
-| `max_sessions` | int | 1 | Max browser tabs |
-| `idle_timeout_seconds` | int | 600 | Browser idle timeout |
-| `default_model` | string | gemini-pro | Default model |
-| `headless` | boolean | true | Run browser headless |
-| `guest_mode` | boolean | true | Use guest mode |
+| Tham số | Kiểu | Mặc định | Mô tả |
+|---------|------|---------|-------|
+| `host` | string | 127.0.0.1 | Địa chỉ bind server |
+| `port` | int | 8765 | Cổng server |
+| `api_key` | string | - | API key của bạn |
+| `max_sessions` | int | 1 | Số tabs tối đa |
+| `idle_timeout_seconds` | int | 600 | Timeout khi không hoạt động |
+| `default_model` | string | gemini-pro | Model mặc định |
+| `headless` | boolean | true | Chạy ẩn trình duyệt |
+| `guest_mode` | boolean | true | Chế độ khách |
 
 ---
 
-## Available Models
+## Models Khả Dụng
 
-| Model | Description | Capabilities |
-|-------|-------------|-------------|
-| `gemini-pro` | Most capable | Complex reasoning, coding |
-| `gemini-thinking` | Deep thinking | Step-by-step analysis |
-| `gemini-flash` | Fast | Quick responses |
-| `gemini-basic` | Basic | Simple tasks |
+| Model | Mô tả | Khả năng |
+|-------|------|---------|
+| `gemini-pro` | Mạnh nhất | Lập luận phức tạp, viết code |
+| `gemini-thinking` | Tư duy sâu | Phân tích từng bước |
+| `gemini-flash` | Nhanh | Phản hồi nhanh |
+| `gemini-basic` | Cơ bản | Tác vụ đơn giản |
 
 ---
 
-## Project Structure
+## Cấu Trúc Dự Án
 
 ```
 GeminiBridge/
 ├── src/
 │   ├── api/
 │   │   ├── server.py       # FastAPI server
-│   │   └── router.py       # Model routing
+│   │   └── router.py       # Định tuyến model
 │   ├── core/
-│   │   ├── client.py       # Gemini browser client
-│   │   ├── adapter.py     # API format adapter
-│   │   └── session.py     # Session manager
+│   │   ├── client.py       # Trình duyệt Gemini
+│   │   ├── adapter.py     # Chuyển đổi định dạng API
+│   │   └── session.py     # Quản lý session
 │   └── schemas/
 │       └── models.py       # Pydantic models
 ├── start_server.py        # Entry point
-├── server_config.json     # Server configuration
-├── config.json          # Client configuration
+├── server_config.json     # Cấu hình server
+├── config.json          # Cấu hình client
 ├── requirements.txt    # Python dependencies
-└── README.md           # This file
+└── README.md           # File này
 ```
 
 ---
 
-## Technical Notes
+## Ghi Chú Kỹ Thuật
 
-### How It Works
+### Cách Hoạt Động
 
-1. **Browser Automation**: Uses `nodriver` (Chrome DevTools Protocol) for browser control
-2. **Session Pool**: Manages multiple browser sessions for parallel requests
-3. **Auto-Recovery**: BrowserWatchdog monitors and restarts crashed browsers
-4. **Streaming**: Polls Gemini DOM every 500ms for real-time response
+1. **Tự động hóa trình duyệt**: Sử dụng `nodriver` (Chrome DevTools Protocol) để điều khiển trình duyệt
+2. **Session Pool**: Quản lý nhiều browser sessions cho request song song
+3. **Tự phục hồi**: BrowserWatchdog theo dõi và khởi động lại trình duyệt khi crash
+4. **Streaming**: Kiểm tra Gemini DOM mỗi 500ms để phản hồi thời gian thực
 
-### Headless Mode
+### Chế độ Headless
 
-When `headless: true`, the browser runs "pseudo-headless" - positioned at `-32000, -32000` on screen. This ensures:
-- Accurate DOM rendering
-- Bypasses headless detection
-- Hidden from user but fully functional
+Khi `headless: true`, trình duyệt chạy "pseudo-headless" - đặt tại vị trí `-32000, -32000` trên màn hình. Điều này đảm bảo:
+- Render DOM chính xác
+- Bỏ qua phát hiện headless
+- Ẩn với người dùng nhưng đầy đủ chức năng
 
-### Guest Mode
+### Chế độ Guest
 
-With `guest_mode: true`:
-- Uses anonymous browser profile
-- No Google login required
-- Safe for public deployment
-- Works with Gemini free tier
+Với `guest_mode: true`:
+- Sử dụng hồ sơ trình duyệt ẩn danh
+- Không cần đăng nhập Google
+- An toàn cho triển khai công khai
+- Hoạt động với Gemini free tier
 
 ---
 
-## Troubleshooting
+## Xử Lý Sự Cố
 
 ### Issue: 401 Unauthorized
 
-**Solution:** Check `api_key` in `server_config.json` matches your request header
+**Giải pháp:** Kiểm tra `api_key` trong `server_config.json` khớp với request header
 
-### Issue: Browser not starting
+### Issue: Trình duyệt không khởi động
 
-**Solution:** Ensure Chrome/Edge is installed. Check `headless: false` for debugging
+**Giải pháp:** Đảm bảo Chrome/Edge đã cài đặt. Kiểm tra `headless: false` để debug
 
-### Issue: Slow response
+### Issue: Phản hồi chậm
 
-**Solution:** This is normal due to browser automation overhead. Consider:
-- Using `gemini-flash` for faster responses
-- Reducing `max_sessions` to 1
-- Increasing throttle delays
+**Giải pháp:** Đây là bình thường do overhead tự động hóa trình duyệt. Cân nhắc:
+- Dùng `gemini-flash` để phản hồi nhanh hơn
+- Giảm `max_sessions` xuống 1
+- Tăng throttle delays
 
 ---
 
@@ -363,6 +363,6 @@ SOFTWARE.
 
 ---
 
-## Disclaimer
+## Tuyên Bố Từ Chối
 
-This project is for educational and research purposes. Use it responsibly and in accordance with Google's Terms of Service. The authors are not responsible for any misuse or account restrictions.
+Dự án này cho mục đích giáo dục và nghiên cứu. Sử dụng có trách nhiệm và tuân thủ Điều Khoản Dịch Vụ của Google. Các tác giả không chịu trách nhiệm cho bất kỳ việc sử dụng sai hoặc hạn chế tài khoản nào.

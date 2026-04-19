@@ -11,5 +11,6 @@
     "language": "vi-VN",
     "selected_model": "Nhanh",
     "guest_mode": true,
-    "last_chat_url": ""
+    "last_chat_url": "",
+    "use_edge": true
 }
